@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react"; // <--- Agregamos useEffect
 import type { Product, CartItem, PaymentMethod, Client } from "@/types/sales";
 import { MOCK_PRODUCTS } from "@/data/products"; // <--- Importación desde tu carpeta global
 
@@ -6,11 +6,24 @@ export const usePOS = () => {
     // --- ESTADOS ---
     const [cart, setCart] = useState<CartItem[]>([]);
     const [client, setClient] = useState<Client | null>(null);
-    const [rate, setRate] = useState<number>(65.50);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("efectivo_usd");
     const [fiscalControl, setFiscalControl] = useState<string>("");
 
-    // --- ACCIONES ---
+    // 1. ESTADO DE TASA PERSISTENTE
+    // Al iniciar, intentamos leer del "disco duro" del navegador. 
+    // Si no existe, usamos 65.50 por defecto.
+    const [rate, setRate] = useState<number>(() => {
+        const savedRate = localStorage.getItem("pos_tasa_bcv");
+        return savedRate ? parseFloat(savedRate) : 65.50;
+    });
+
+    // 2. EFECTO DE GUARDADO AUTOMÁTICO
+    // Cada vez que cambies la 'rate', este código se ejecuta y guarda el nuevo valor.
+    useEffect(() => {
+        localStorage.setItem("pos_tasa_bcv", rate.toString());
+    }, [rate]);
+
+    // --- ACCIONES (Igual que antes) ---
     const addToCart = (product: Product) => {
         setCart((prev) => {
             const existing = prev.find((item) => item.id === product.id);
@@ -40,6 +53,10 @@ export const usePOS = () => {
         );
     };
 
+    // En src/hooks/usePOS.ts
+
+    // ... código anterior ...
+
     // --- CÁLCULOS ---
     const totals = useMemo(() => {
         const subtotalUSD = cart.reduce((acc, item) => acc + item.totalUSD, 0);
@@ -54,9 +71,12 @@ export const usePOS = () => {
             igtfAmount,
             totalUSD,
             totalBs,
-            isForeignCurrency
+            isForeignCurrency,
+            rate // <--- ¡AGREGA ESTA LÍNEA! (Esto envía la tasa al PDF)
         };
     }, [cart, paymentMethod, rate]);
+
+    // ... resto del código ...
 
     const formatBs = (amount: number) =>
         new Intl.NumberFormat("es-VE", { style: "currency", currency: "VES" }).format(amount * rate);

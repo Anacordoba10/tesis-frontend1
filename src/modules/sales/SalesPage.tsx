@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { usePOS } from "@/hooks/usePOS"; // <--- Usamos tu hook global
+import { usePOS } from "@/hooks/usePOS";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, Trash2, FileText, User, CreditCard, RefreshCw, DollarSign, Smartphone, UserPlus, X } from "lucide-react";
+import { Search, Trash2, FileText, User, CreditCard, RefreshCw, DollarSign, Smartphone, X } from "lucide-react";
+import { AddClientModal } from "./AddClientModal";
+import { SaleSuccessModal } from "./SaleSuccessModal"; // <--- 1. Importación del Modal
 
 export default function SalesPage() {
     // 1. INVOCAMOS NUESTRO SUPER HOOK
@@ -23,18 +25,50 @@ export default function SalesPage() {
         updateQuantity,
         client,
         setClient,
-        productsCatalog // Catálogo completo para buscar
+        productsCatalog,
+        // --- AGREGA ESTOS DOS ---
+        fiscalControl,
+        setFiscalControl
     } = usePOS();
 
-    // 2. ESTADOS LOCALES DE LA VISTA (Solo UI)
+    // 2. ESTADOS LOCALES DE LA VISTA
     const [searchTerm, setSearchTerm] = useState("");
     const [isSearching, setIsSearching] = useState(false);
 
-    // Filtramos productos según lo que escribas
+    // --- NUEVOS ESTADOS PARA PROCESO DE VENTA ---
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [successData, setSuccessData] = useState<any>(null);
+
+    // Filtramos productos
     const filteredProducts = productsCatalog.filter(p =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.sku.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Dentro de SalesPage.tsx, busca la función handleProcessSale:
+
+    const handleProcessSale = () => {
+        // ... validaciones ...
+        setIsProcessing(true);
+
+        setTimeout(() => {
+            const saleData = {
+                totals,
+                client,
+                fiscalControl,
+                paymentMethod,
+                cart // <--- ¡ASEGÚRATE DE QUE ESTO ESTÉ AQUÍ!
+            };
+
+            setSuccessData(saleData);
+            setIsProcessing(false);
+        }, 1500);
+    };
+
+    const handleCloseSuccess = () => {
+        setSuccessData(null);
+        window.location.reload(); // Reinicia para la siguiente venta
+    };
 
     return (
         <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
@@ -59,8 +93,7 @@ export default function SalesPage() {
 
                     {/* --- IZQUIERDA: BUSCADOR Y CARRITO --- */}
                     <div className="flex-[2] flex flex-col gap-4">
-
-                        {/* BUSCADOR FUNCIONAL */}
+                        {/* BUSCADOR */}
                         <Card className="relative z-20 overflow-visible">
                             <CardContent className="p-4 flex gap-4">
                                 <div className="relative flex-1">
@@ -74,8 +107,7 @@ export default function SalesPage() {
                                             setIsSearching(e.target.value.length > 0);
                                         }}
                                     />
-
-                                    {/* RESULTADOS DE BÚSQUEDA (FLOTANTE) */}
+                                    {/* RESULTADOS FLOTANTES */}
                                     {isSearching && (
                                         <div className="absolute top-12 left-0 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
                                             {filteredProducts.length === 0 ? (
@@ -87,7 +119,7 @@ export default function SalesPage() {
                                                         className="flex justify-between items-center p-3 hover:bg-gray-100 cursor-pointer border-b last:border-0"
                                                         onClick={() => {
                                                             addToCart(product);
-                                                            setSearchTerm(""); // Limpiar búsqueda al agregar
+                                                            setSearchTerm("");
                                                             setIsSearching(false);
                                                         }}
                                                     >
@@ -107,7 +139,7 @@ export default function SalesPage() {
                             </CardContent>
                         </Card>
 
-                        {/* TABLA DEL CARRITO (CONECTADA AL HOOK) */}
+                        {/* TABLA CARRITO */}
                         <Card className="flex-1 overflow-hidden flex flex-col z-10">
                             <CardHeader className="py-4 border-b">
                                 <CardTitle className="text-sm">Items en la Orden ({cart.length})</CardTitle>
@@ -186,9 +218,7 @@ export default function SalesPage() {
                                     <User className="h-4 w-4" /> Cliente
                                 </CardTitle>
                                 {!client && (
-                                    <Button variant="ghost" size="sm" className="h-8 text-xs text-blue-600">
-                                        <UserPlus className="mr-1 h-3 w-3" /> Nuevo
-                                    </Button>
+                                    <AddClientModal onClientCreated={setClient} />
                                 )}
                             </CardHeader>
                             <CardContent className="pb-4">
@@ -226,10 +256,17 @@ export default function SalesPage() {
                             </CardContent>
                         </Card>
 
-                        {/* CONTROL FISCAL */}
+                        {/* CONTROL FISCAL (CONECTADO) */}
                         <Card className="border-blue-200 bg-blue-50/50">
                             <CardHeader className="pb-2 pt-3"><CardTitle className="text-xs font-medium flex items-center gap-2 text-blue-800"><FileText className="h-3 w-3" /> Control (Talonario)</CardTitle></CardHeader>
-                            <CardContent className="pb-3"><Input placeholder="Ej: 00-003451" className="bg-white border-blue-200 h-8 text-sm" /></CardContent>
+                            <CardContent className="pb-3">
+                                <Input
+                                    placeholder="Ej: 00-003451"
+                                    className="bg-white border-blue-200 h-8 text-sm"
+                                    value={fiscalControl}
+                                    onChange={(e) => setFiscalControl(e.target.value)}
+                                />
+                            </CardContent>
                         </Card>
 
                         {/* TOTALES CALCULADOS */}
@@ -261,8 +298,20 @@ export default function SalesPage() {
                                     </div>
                                 </div>
 
-                                <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-10 mt-2" disabled={cart.length === 0}>
-                                    <CreditCard className="mr-2 h-4 w-4" /> Procesar Venta
+                                <Button
+                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-10 mt-2"
+                                    disabled={cart.length === 0 || isProcessing}
+                                    onClick={handleProcessSale}
+                                >
+                                    {isProcessing ? (
+                                        <>
+                                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Procesando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CreditCard className="mr-2 h-4 w-4" /> Procesar Venta
+                                        </>
+                                    )}
                                 </Button>
                             </CardContent>
                         </Card>
@@ -270,6 +319,15 @@ export default function SalesPage() {
                 </TabsContent>
                 <TabsContent value="history"><div className="p-4 text-center">Historial...</div></TabsContent>
             </Tabs>
+
+            {/* MODAL DE ÉXITO */}
+            <SaleSuccessModal
+                open={!!successData}
+                onClose={handleCloseSuccess}
+                data={successData}
+                formatUSD={formatUSD}
+                formatBs={formatBs}
+            />
         </div>
     );
 }
